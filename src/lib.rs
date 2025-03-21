@@ -1,15 +1,16 @@
 
 use std::fs::File;
+use std::fs;
 use opener::open;
 use open as browser_open;
-use std::io::Error;
+use std::io::{Error, Read};
 use colored::Colorize;
 
 
 const TEXTBOOKS_PATH: &'static str = "/Users/jakebruner/Documents/textbooks/";
 
 pub fn get_sub_directories(path: &str) -> Result<Vec<String>, TextbookError> {
-    Ok(std::fs::read_dir(path)?
+    Ok(fs::read_dir(path)?
         .filter_map(|entry| entry.ok())
         .filter_map(|entry| {
             let path = entry.path();
@@ -64,15 +65,34 @@ pub fn run(config: Config) -> Result<(), TextbookError> {
     }
     return if config.solutions {
         let file = files.iter().find(|&f| f.to_lowercase().contains("solutions")).ok_or(TextbookError::new("No solutions manual found."))?;
-        handle_open(file, config.inbrowser);
+        if file.ends_with(".txt") {
+            let path = get_txt_url(file)?;
+            handle_open(path.as_str(), false);
+        } else {
+            handle_open(file, config.inbrowser);
+        }
         println!("{} {} {} {}{}","Opening".bold().green(), "solutions".bold().underline().bright_green(), "manual for class".bold().green(), config.class.bold().bright_green().underline(), "...".bold().green());
         Ok(())
     } else {
         let file = files.iter().find(|&f| !f.contains("solutions")).ok_or(TextbookError::new("No textbook found."))?;
-        handle_open(file, config.inbrowser);
+        if file.ends_with(".txt") {
+            let path = get_txt_url(file)?;
+            handle_open(path.as_str(), false);
+        } else {
+            handle_open(file, config.inbrowser);
+        }
         println!("{} {}{}", "Opening textbook for class".bold().green(), config.class.bold().bright_green().underline(), "...".bold().green());
         Ok(())
     };
+}
+
+fn get_txt_url(file: &str) -> Result<String, TextbookError> {
+
+    let mut text_file = File::open(file).map_err(|_| TextbookError::new("Failed to open url file."))?;
+    let mut contents = String::new();
+    text_file.read_to_string(&mut contents)?;
+
+    Ok(contents.trim_end().to_string())
 }
 
 #[derive(Debug)]
@@ -125,7 +145,7 @@ impl Config<'_> {
                     println!("Options:");
                     println!("-h: Display this help message.");
                     println!("-s: Open the solutions manual.");
-                    println!("-b: Use bold text.");
+                    println!("-b: Open the file in the browser.");
                     println!("Open the textbook or solution manual for a given class.");
                     println!("Example: textbooks ece250");
                     println!("Example: textbooks -s -b ece250");
@@ -155,8 +175,9 @@ impl Config<'_> {
     }
 }
 
-pub fn handle_open(path: &str, inbrowser: bool) -> () {
-    if inbrowser {
+
+pub fn handle_open(path: &str, file_inbrowser: bool) -> () {
+    if file_inbrowser {
         browser_open::with(path, "firefox").unwrap_or_else(|err| {
             eprintln!("Problem opening file: {}", err);
             std::process::exit(1);
@@ -167,5 +188,4 @@ pub fn handle_open(path: &str, inbrowser: bool) -> () {
             std::process::exit(1);
         });
     }
-
 }
